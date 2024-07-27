@@ -8,7 +8,7 @@ from repository import MemeRepository
 from schemas import MemeAdd
 
 router = APIRouter(
-    prefix="/test",
+    prefix="/memes",
     tags=["Мемы"]
 )
 
@@ -29,7 +29,7 @@ try:
 except s3_client.exceptions.BucketAlreadyOwnedByYou:
     pass
 
-@router.post("/memes/")
+@router.post("")
 async def upload_file(file: UploadFile = File(...)):
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(status_code=400, detail="Неправильный тип файла. Необходима картинка jpeg/png")
@@ -37,23 +37,23 @@ async def upload_file(file: UploadFile = File(...)):
     s3_client.put_object(Bucket=bucket_name, Key=file.filename, Body=file_content)
     meme_data = MemeAdd(name=file.filename)
     meme_id = await MemeRepository.add_one(meme_data)
-    return JSONResponse(status_code=200, content={"filename": file.filename})
+    return JSONResponse(status_code=200, content={"Добавлен": file.filename})
 
-@router.delete("/memes/{filename}")
+@router.delete("/{meme_id}")
 async def delete_file(meme_id: int):
     meme = await MemeRepository.find_by_id(meme_id)
     if not meme:
         raise HTTPException(status_code=404, detail="Мем не найден")
     s3_client.delete_object(Bucket=bucket_name, Key=meme.name)
     await MemeRepository.delete_by_id(meme_id)
-    return JSONResponse(status_code=200, content={"deleted": meme.name})
+    return JSONResponse(status_code=200, content={"Удалён": meme.name})
 
 @router.get("")
 async def get_memes(limit: int = Query(2, gt=0, le=100), offset: int = Query(0, ge=0)):
     memes = await MemeRepository.find_all(limit=limit, offset=offset)
-    return {"memes": memes}
+    return {"Мемы": memes}
 
-@router.get("{meme_id}")
+@router.get("/{meme_id}")
 async def get_meme(meme_id: int):
     meme = await MemeRepository.find_by_id(meme_id)
     if not meme:
@@ -61,10 +61,10 @@ async def get_meme(meme_id: int):
     filename = meme.name
     file_obj = s3_client.get_object(Bucket=bucket_name, Key=filename)
     file_stream = file_obj['Body'].read()
-    return StreamingResponse(BytesIO(file_stream), media_type='image')
+    return StreamingResponse(BytesIO(file_stream), media_type='image/jpeg')
 
 
-@router.put("/memes/{meme_id}")
+@router.put("/{meme_id}")
 async def update_meme(meme_id: int = Path(..., ge=1), file: UploadFile = File(None), new_name: str = None):
     meme = await MemeRepository.find_by_id(meme_id)
     if not meme:
@@ -93,7 +93,7 @@ async def update_meme(meme_id: int = Path(..., ge=1), file: UploadFile = File(No
         meme.name = new_name
         await MemeRepository.update_meme(meme_id, meme.name)
 
-    return JSONResponse(status_code=200, content={"updated": meme_id, "filename": meme.name})
+    return JSONResponse(status_code=200, content={"Обновлён мем с id": meme_id, "Имя": meme.name})
 
 # @router.get("/memes/")
 # async def get_memes():
